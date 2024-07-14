@@ -19,7 +19,7 @@ This will create an executable file named `convert`.
 To convert a Go file to a Cap'n Proto schema and print the output to the console, run:
 
 ```bash
-./go_to_capnp path/to/your/file.go
+./convert path/to/your/file.go
 ```
 
 ### Example
