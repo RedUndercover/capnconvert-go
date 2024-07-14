@@ -65,7 +65,7 @@ type AnotherInterface interface {
 Running the command:
 
 ```bash
-./go_to_capnp test_input.go -o output.capnp
+./go_to_capnp test_input.go
 ```
 
 Will produce the following Cap'n Proto schema:
