@@ -11,51 +11,7 @@ import (
 	"strings"
 )
 
-var goToCapnpType = map[string]string{
-	"int":     "Int32",
-	"int32":   "Int32",
-	"int64":   "Int64",
-	"float32": "Float32",
-	"float64": "Float64",
-	"string":  "Text",
-	"bool":    "Bool",
-	"error":   "Text",
-}
-
-func goToCapnp(goType string) string {
-	if capnpType, found := goToCapnpType[goType]; found {
-		return capnpType
-	}
-	if strings.HasPrefix(goType, "[]") {
-		return fmt.Sprintf("List(%s)", goToCapnp(goType[2:]))
-	}
-	// if we have a . in the type, it's an imported type
-	// it should be flattened to the last part of the type name in the schema
-	if goTypeParts := strings.Split(goType, "."); len(goTypeParts) > 1 {
-		//return the last part of the type
-		return goTypeParts[len(goTypeParts)-1]
-	}
-
-	return goType // Assuming it's a custom type defined elsewhere
-}
-
-func typeToString(expr ast.Expr, info *types.Info) string {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		return t.Name
-	case *ast.ArrayType:
-		return "[]" + typeToString(t.Elt, info)
-	case *ast.StarExpr:
-		return "*" + typeToString(t.X, info)
-	case *ast.SelectorExpr:
-		// Handle imported types
-		typeName := t.Sel.Name
-		return typeName
-	default:
-		return fmt.Sprintf("%T", t)
-	}
-}
-
+// Convert takes a Go file and converts it to a Cap'n Proto schema
 func Convert(goFile string) (*bytes.Buffer, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, goFile, nil, parser.AllErrors)
@@ -91,11 +47,11 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 							fieldType := typeToString(field.Type, info)
 							fieldNames := make([]string, len(field.Names))
 							for j, name := range field.Names {
-								fieldNames[j] = name.Name
+								fieldNames[j] = toLowerCamelCase(name.Name)
 							}
 							if len(fieldNames) == 0 {
 								// Embedded struct
-								fieldNames = append(fieldNames, fieldType)
+								fieldNames = append(fieldNames, toLowerCamelCase(fieldType))
 							}
 							fields = append(fields, fmt.Sprintf("%s @%d :%s;", strings.Join(fieldNames, ", "), i, goToCapnp(fieldType)))
 						}
@@ -110,7 +66,7 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 									paramType := typeToString(param.Type, info)
 									paramNames := make([]string, len(param.Names))
 									for j, name := range param.Names {
-										paramNames[j] = name.Name
+										paramNames[j] = toLowerCamelCase(name.Name)
 									}
 									params = append(params, fmt.Sprintf("%s :%s", strings.Join(paramNames, ", "), goToCapnp(paramType)))
 								}
@@ -118,7 +74,7 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 									resultType := typeToString(result.Type, info)
 									results = append(results, fmt.Sprintf("result%d :%s", j, goToCapnp(resultType)))
 								}
-								methods = append(methods, fmt.Sprintf("%s @%d (%s) -> (%s);", method.Names[0].Name, i, strings.Join(params, ", "), strings.Join(results, ", ")))
+								methods = append(methods, fmt.Sprintf("%s @%d (%s) -> (%s);", toLowerCamelCase(method.Names[0].Name), i, strings.Join(params, ", "), strings.Join(results, ", ")))
 							}
 						}
 						interfaces[ts.Name.Name] = methods
@@ -135,7 +91,7 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 				for i := 0; i < structType.NumFields(); i++ {
 					field := structType.Field(i)
 					fieldType := field.Type().String()
-					fields = append(fields, fmt.Sprintf("%s @%d :%s;", field.Name(), i, goToCapnp(fieldType)))
+					fields = append(fields, fmt.Sprintf("%s @%d :%s;", toLowerCamelCase(field.Name()), i, goToCapnp(fieldType)))
 				}
 				importedStructs[typeName] = fields
 			}
@@ -144,6 +100,12 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 	})
 
 	var capnpSchema bytes.Buffer
+
+	// Add necessary headers
+	capnpSchema.WriteString("using Go = import \"/go.capnp\";\n")
+	capnpSchema.WriteString(fmt.Sprintf("@0x%s\n", genNewCapnpId()))
+	capnpSchema.WriteString("$Go.package(\"contract_impl\");\n")
+	capnpSchema.WriteString("$Go.import(\"github.com/RedUndercover/capnconvert-go/testdata/contract\");\n\n")
 
 	// Generate Cap'n Proto schema for structs
 	for structName, fields := range structs {
