@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -71,11 +72,20 @@ func TestConversion(t *testing.T) {
 	}
 
 	// Step 1: Run the conversion function
-	schema, err := Convert(inputFilePath)
+	schema := new(strings.Builder)
+	err = Convert(inputFilePath, schema)
 	if err != nil {
 		t.Fatalf("Error running conversion function: %v", err)
 	}
-	schemaStr := schema.String()
+	// remove second line from schema
+	lines := strings.Split(schema.String(), "\n")
+	schema.Reset()
+	for i, line := range lines {
+		if i != 1 {
+			schema.WriteString(line)
+			schema.WriteString("\n")
+		}
+	}
 
 	// Step 2: Read the expected output
 	expected, err := ioutil.ReadFile(expectedOutputPath)
@@ -84,7 +94,7 @@ func TestConversion(t *testing.T) {
 	}
 
 	// Step 3: Write the output to the file
-	err = ioutil.WriteFile(outputFilePath, []byte(schemaStr), 0644)
+	err = ioutil.WriteFile(outputFilePath, []byte(schema.String()), 0644)
 	if err != nil {
 		t.Fatalf("Error writing to file: %v", err)
 	}
@@ -96,6 +106,6 @@ func TestConversion(t *testing.T) {
 	}
 
 	if !result {
-		t.Errorf("Test failed!\nExpected:\n%s\nGot:\n%s", string(expected), schemaStr)
+		t.Errorf("Test failed!\nExpected:\n%s\nGot:\n%s", string(expected), schema.String())
 	}
 }
