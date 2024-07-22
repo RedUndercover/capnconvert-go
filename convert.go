@@ -1,22 +1,21 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
 	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io"
 	"strings"
 )
 
-// Convert takes a Go file and converts it to a Cap'n Proto schema
-func Convert(goFile string) (*bytes.Buffer, error) {
+func Convert(goFile string, writer io.Writer) error {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, goFile, nil, parser.AllErrors)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	conf := types.Config{Importer: importer.For("source", nil)}
@@ -27,7 +26,7 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 	}
 	_, err = conf.Check("", fset, []*ast.File{node}, info)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	structs := make(map[string][]string)
@@ -99,40 +98,40 @@ func Convert(goFile string) (*bytes.Buffer, error) {
 		return true
 	})
 
-	var capnpSchema bytes.Buffer
+	capnpSchema := writer
 
 	// Add necessary headers
-	capnpSchema.WriteString("using Go = import \"/go.capnp\";\n")
-	capnpSchema.WriteString(fmt.Sprintf("@0x%s\n", genNewCapnpId()))
-	capnpSchema.WriteString("$Go.package(\"contract_impl\");\n")
-	capnpSchema.WriteString("$Go.import(\"github.com/RedUndercover/capnconvert-go/testdata/contract\");\n\n")
+	io.WriteString(capnpSchema, "using Go = import \"/go.capnp\";\n")
+	io.WriteString(capnpSchema, fmt.Sprintf("@0x%s\n", genNewCapnpId()))
+	io.WriteString(capnpSchema, "$Go.package(\"contract_impl\");\n")
+	io.WriteString(capnpSchema, "$Go.import(\"github.com/RedUndercover/capnconvert-go/testdata/contract\");\n\n")
 
 	// Generate Cap'n Proto schema for structs
 	for structName, fields := range structs {
-		capnpSchema.WriteString(fmt.Sprintf("struct %s {\n", structName))
+		io.WriteString(capnpSchema, fmt.Sprintf("struct %s {\n", structName))
 		for _, field := range fields {
-			capnpSchema.WriteString(fmt.Sprintf("  %s\n", field))
+			io.WriteString(capnpSchema, fmt.Sprintf("  %s\n", field))
 		}
-		capnpSchema.WriteString("}\n")
+		io.WriteString(capnpSchema, "}\n")
 	}
 
 	// Generate Cap'n Proto schema for imported structs
 	for structName, fields := range importedStructs {
-		capnpSchema.WriteString(fmt.Sprintf("struct %s {\n", structName))
+		io.WriteString(capnpSchema, fmt.Sprintf("struct %s {\n", structName))
 		for _, field := range fields {
-			capnpSchema.WriteString(fmt.Sprintf("  %s\n", field))
+			io.WriteString(capnpSchema, fmt.Sprintf("  %s\n", field))
 		}
-		capnpSchema.WriteString("}\n")
+		io.WriteString(capnpSchema, "}\n")
 	}
 
 	// Generate Cap'n Proto schema for interfaces
 	for interfaceName, methods := range interfaces {
-		capnpSchema.WriteString(fmt.Sprintf("interface %s {\n", interfaceName))
+		io.WriteString(capnpSchema, fmt.Sprintf("interface %s {\n", interfaceName))
 		for _, method := range methods {
-			capnpSchema.WriteString(fmt.Sprintf("  %s\n", method))
+			io.WriteString(capnpSchema, fmt.Sprintf("  %s\n", method))
 		}
-		capnpSchema.WriteString("}\n")
+		io.WriteString(capnpSchema, "}\n")
 	}
 
-	return &capnpSchema, nil
+	return nil
 }
