@@ -20,3 +20,8 @@
 # Go workspace file
 go.work
 go.work.sum
+testdata/temp/*
+capnp.exe
+capnpc-c++.exe
+capnpc-capnp.exe
+gocapnp/*
