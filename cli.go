@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"strings"
+
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +16,8 @@ func main() {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			goFile := args[0]
-			schema, err := Convert(goFile)
+			schema := new(strings.Builder)
+			err := Convert(goFile, schema)
 			if err != nil {
 				fmt.Println("Error converting Go to Cap'n Proto:", err)
 				os.Exit(1)
